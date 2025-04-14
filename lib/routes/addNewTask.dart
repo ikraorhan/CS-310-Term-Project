@@ -143,7 +143,7 @@ class _AddNewTaskPageState extends State<AddNewTaskPage> {
               const SizedBox(height: 20),
               // Title Field
               Text(
-                'TITLE:',
+                'Tittle:',
                 style: AppTextStyles.loginLabel.copyWith(fontSize: 16),
               ),
               const SizedBox(height: 8),
@@ -155,7 +155,7 @@ class _AddNewTaskPageState extends State<AddNewTaskPage> {
                   fontFamily: 'LibreBaskerville',
                 ),
                 decoration: InputDecoration(
-                  hintText: 'Example title',
+                  hintText: 'Add your tittle here!',
                   hintStyle: AppTextStyles.loginLabel.copyWith(
                     color: Colors.grey,
                     fontSize: 14,
@@ -171,7 +171,7 @@ class _AddNewTaskPageState extends State<AddNewTaskPage> {
               const SizedBox(height: 20),
               // Description Field
               Text(
-                'DESCRIPTION:',
+                'Description:',
                 style: AppTextStyles.loginLabel.copyWith(fontSize: 16),
               ),
               const SizedBox(height: 8),
@@ -184,7 +184,7 @@ class _AddNewTaskPageState extends State<AddNewTaskPage> {
                   fontFamily: 'LibreBaskerville',
                 ),
                 decoration: InputDecoration(
-                  hintText: 'Lorem ipsum dolor amet',
+                  hintText: 'Add description for your task.',
                   hintStyle: AppTextStyles.loginLabel.copyWith(
                     color: Colors.grey,
                     fontSize: 14,
@@ -200,7 +200,7 @@ class _AddNewTaskPageState extends State<AddNewTaskPage> {
               const SizedBox(height: 20),
               // Date Field for Task
               Text(
-                'DATE:',
+                'Date:',
                 style: AppTextStyles.loginLabel.copyWith(fontSize: 16),
               ),
               const SizedBox(height: 8),
@@ -231,7 +231,7 @@ class _AddNewTaskPageState extends State<AddNewTaskPage> {
               Row(
                 children: [
                   Text(
-                    'ALARM:',
+                    'Alarm:',
                     style: AppTextStyles.loginLabel.copyWith(fontSize: 16),
                   ),
                   const SizedBox(width: 20),
@@ -251,7 +251,7 @@ class _AddNewTaskPageState extends State<AddNewTaskPage> {
               Row(
                 children: [
                   Text(
-                    'ALARM TIME:',
+                    'Alarm Time:',
                     style: AppTextStyles.loginLabel.copyWith(fontSize: 16),
                   ),
                   const SizedBox(width: 20),
@@ -282,12 +282,37 @@ class _AddNewTaskPageState extends State<AddNewTaskPage> {
                 ],
               ),
               const SizedBox(height: 40),
-              // "Create Task" Button
+              // "Create Task" Button with Form Validation
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    // TODO: Implement task creation logic.
+                    // Validate required fields: Title, Description, and Date.
+                    if (_titleController.text.trim().isEmpty ||
+                        _descriptionController.text.trim().isEmpty ||
+                        _selectedDate == null) {
+                      showDialog(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return AlertDialog(
+                            title: const Text("Missing Fields"),
+                            content: const Text(
+                              "Please fill in all required fields.",
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                },
+                                child: const Text("OK"),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                      return;
+                    }
+                    // All required fields are filled: proceed to create the task.
                     Navigator.pop(context);
                   },
                   style: ElevatedButton.styleFrom(
