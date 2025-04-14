@@ -1,0 +1,2 @@
+/Users/ramazanyildirim/Desktop/tick_task/android/app/.cxx/RelWithDebInfo/474m4h6d/x86_64/CMakeFiles/edit_cache.dir
+/Users/ramazanyildirim/Desktop/tick_task/android/app/.cxx/RelWithDebInfo/474m4h6d/x86_64/CMakeFiles/rebuild_cache.dir
