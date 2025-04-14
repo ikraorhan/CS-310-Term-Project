@@ -4,31 +4,26 @@ import 'package:flutter/material.dart';
 import 'package:tick_task/util/colors.dart';
 import 'package:tick_task/util/styles.dart';
 
-class HomePage extends StatefulWidget {
+class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
-}
-
-class _HomePageState extends State<HomePage> {
-  // Example weekly progress data.
-  final List<Map<String, dynamic>> weeklyProgress = [
-    {'week': 'Week 1', 'progress': 0.75}, // 75%
-    {'week': 'Week 2', 'progress': 0.50}, // 50%
-    {'week': 'Week 3', 'progress': 0.25}, // 25%
-    {'week': 'Week 4', 'progress': 0.20}, // 20%
-  ];
-
-  // Updated upcoming tasks list with a "done" flag.
-  List<Map<String, dynamic>> upcomingTasks = [
-    {'title': 'Buy groceries', 'done': false},
-    {'title': 'Finish the Flutter project', 'done': false},
-    {'title': 'Prepare meeting agenda', 'done': false},
-  ];
-
-  @override
   Widget build(BuildContext context) {
+    // Example weekly data
+    final List<Map<String, dynamic>> weeklyProgress = [
+      {'week': 'Week 1', 'progress': 0.75}, // 75%
+      {'week': 'Week 2', 'progress': 0.50}, // 50%
+      {'week': 'Week 3', 'progress': 0.25}, // 25%
+      {'week': 'Week 4', 'progress': 0.20}, // 20%
+    ];
+
+    // Example upcoming tasks
+    final List<String> upcomingTasks = [
+      'Buy groceries',
+      'Finish the Flutter project',
+      'Prepare meeting agenda',
+    ];
+
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
       // Custom AppBar with a spacer on top of the "TickTask" text.
@@ -66,10 +61,10 @@ class _HomePageState extends State<HomePage> {
               // Row for profile info with settings icon.
               Row(
                 children: [
-                  // Profile picture from network.
+                  // Profile picture (replace with your own image asset).
                   ClipOval(
-                    child: Image.network(
-                      'https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+                    child: Image.asset(
+                      'lib/assets/user_profile.jpg', // Ensure this asset exists.
                       width: 80,
                       height: 80,
                       fit: BoxFit.cover,
@@ -94,7 +89,8 @@ class _HomePageState extends State<HomePage> {
                       size: 28,
                     ),
                     onPressed: () {
-                      Navigator.pushNamed(context, '/settings');
+                      // TODO: Add navigation to settings page if desired.
+                      // Example: Navigator.pushNamed(context, '/settings');
                     },
                   ),
                 ],
@@ -162,31 +158,6 @@ class _HomePageState extends State<HomePage> {
                     }).toList(),
               ),
               const SizedBox(height: 30),
-              // "Review All Tasks" Button.
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/review');
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.mainColor,
-                    padding: const EdgeInsets.symmetric(vertical: 16.0),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12.0),
-                    ),
-                  ),
-                  child: const Text(
-                    'Review Your Progress',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontFamily: 'LibreBaskerville',
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 30),
               // Upcoming Tasks Header.
               Text(
                 'Upcoming Tasks',
@@ -196,7 +167,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               const SizedBox(height: 10),
-              // Upcoming Tasks List with "mark as done" feature.
+              // Upcoming Tasks List.
               Column(
                 children:
                     upcomingTasks.map((task) {
@@ -207,63 +178,41 @@ class _HomePageState extends State<HomePage> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: ListTile(
-                          // Leading icon to mark task as done.
-                          leading: IconButton(
-                            icon: Icon(
-                              task['done']
-                                  ? Icons.check_box
-                                  : Icons.check_box_outline_blank,
-                              color: AppColors.mainColor,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                task['done'] = !task['done'];
-                              });
-                            },
-                          ),
                           title: Text(
-                            task['title'],
+                            task,
                             style: AppTextStyles.loginLabel.copyWith(
                               fontFamily: 'LibreBaskerville',
                               color: Colors.grey.shade800,
                               fontWeight: FontWeight.w400,
-                              decoration:
-                                  task['done']
-                                      ? TextDecoration.lineThrough
-                                      : TextDecoration.none,
                             ),
                           ),
-                          // X button to delete the task.
-                          trailing: IconButton(
-                            icon: Icon(Icons.close, color: AppColors.mainColor),
-                            onPressed: () {
-                              setState(() {
-                                upcomingTasks.remove(task);
-                              });
-                            },
+                          trailing: Icon(
+                            Icons.keyboard_arrow_right,
+                            color: AppColors.mainColor,
                           ),
                         ),
                       );
                     }).toList(),
               ),
               const SizedBox(height: 30),
-              // "Manage Tasks" Button.
+              // "Add New Task" Button placed after Upcoming Tasks.
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    Navigator.pushNamed(context, '/manageTask');
+                    // Navigate to the addNewTask page.
+                    Navigator.pushNamed(context, '/addNewTask');
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.mainColor,
+                    backgroundColor: AppColors.mainColor, // Main color.
                     padding: const EdgeInsets.symmetric(vertical: 16.0),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12.0),
                     ),
                   ),
-                  icon: const Icon(Icons.manage_accounts, color: Colors.white),
+                  icon: const Icon(Icons.add, color: Colors.white),
                   label: const Text(
-                    'Manage Tasks',
+                    'Add New Task',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 18,
@@ -272,39 +221,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 30),
-              // Horizontal line similar to AppBar's bottom.
-              Container(
-                width: double.infinity,
-                height: 2.0,
-                color: AppColors.mainColor,
-              ),
-              const SizedBox(height: 20),
-              // "How to Use" Button.
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/howTo');
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.mainColor,
-                    padding: const EdgeInsets.symmetric(vertical: 16.0),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12.0),
-                    ),
-                  ),
-                  child: const Text(
-                    'How to Use',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontFamily: 'LibreBaskerville',
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 30), // Extra space at the bottom.
+              const SizedBox(height: 30), // Extra space at bottom.
             ],
           ),
         ),
