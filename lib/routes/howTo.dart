@@ -74,13 +74,24 @@ class HowToPage extends StatelessWidget {
                   color: Colors.grey.shade200,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
-                  'Coming Soon',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontFamily: 'LibreBaskerville',
-                    color: Colors.black,
-                    height: 1.4,
+                const Text(
+               'Welcome to Tick Task - Your Daily and Weekly Helper\n\n'
+               '1) Create an Account or Log In\n'
+               '2) Set Up Your Plans\n'
+                '   • You can set Daily / Weekly / Monthly plans\n'
+                '3) Add Tasks Easily\n'
+                '   • Task Title\n'
+                '   • Due Date\n'
+                '4) Mark Tasks as Complete\n'
+                '5) Set Your Timer and Start Working',
+                   style: TextStyle(
+                   fontSize: 16,
+                   fontFamily: 'LibreBaskerville',
+                   color: Colors.black,
+                   height: 1.6,
+                     ),
+                    ),
+
                   ),
                 ),
               ),
