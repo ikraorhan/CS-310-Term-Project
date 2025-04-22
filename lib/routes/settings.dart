@@ -137,9 +137,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 8),
               ElevatedButton(
-                onPressed: () {
-                  // TODO: Integrate Flutter image upload functionality here.
-                },
+                onPressed: () {},
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.mainColor,
                   shape: RoundedRectangleBorder(

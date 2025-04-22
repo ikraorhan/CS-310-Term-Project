@@ -5,7 +5,7 @@ import 'package:tick_task/util/colors.dart';
 import 'package:tick_task/util/styles.dart';
 
 class SignUpPage extends StatefulWidget {
-  const SignUpPage({Key? key}) : super(key: key);
+  const SignUpPage({super.key});
 
   @override
   State<SignUpPage> createState() => _SignUpPageState();
