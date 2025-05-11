@@ -75,15 +75,25 @@ class HowToPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
-                  'Welcome to Tick Task - Your Daily and Weekly Helper\n\n'
-                  '1) Create an Account or Log In\n\n'
-                  '2) Set Up Your Plans\n'
-                  '   • You can set Daily / Weekly plans\n\n'
-                  '3) Add Tasks Easily\n'
-                  '   • Task Title\n'
-                  '   • Due Date\n\n'
-                  '4) Mark Tasks as Complete\n\n'
-                  '5) Set Your Timer and Start Working',
+                  'Welcome to TickTask - Your Daily and Weekly Helper\n\n'
+                  '✔ Step 1: Create an Account or Log In\n'
+                  '   • Tap on "Sign Up" to register or "Login" to enter your account.\n\n'
+                  '✔ Step 2: Add New Tasks\n'
+                  '   • Navigate to "Add Task" and enter:\n'
+                  '     - Task Title\n'
+                  '     - Optional: Due Date\n\n'
+                  '✔ Step 3: View Your Tasks\n'
+                  '   • All tasks will appear on the Home Page\n'
+                  '   • Tasks are separated into Daily and Weekly\n\n'
+                  '✔ Step 4: Mark Tasks as Done\n'
+                  '   • Use the checkbox to mark completed tasks\n'
+                  '   • You can also delete a task anytime\n\n'
+                  '✔ Step 5: Weekly Review\n'
+                  '   • View your progress each week with our progress bar\n\n'
+                  '✔ Step 6: Explore More\n'
+                  '   • Manage all tasks from the "Manage Tasks" section\n'
+                  '   • Use the timer to stay focused while working\n\n'
+                  '🎯 Tip: Stay consistent and check in daily to build strong habits!',
                   style: TextStyle(
                     fontSize: 16,
                     fontFamily: 'LibreBaskerville',

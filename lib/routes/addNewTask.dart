@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:tick_task/util/colors.dart';
 import 'package:tick_task/util/styles.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:tick_task/services/notification_service.dart';
 
 class AddNewTaskPage extends StatefulWidget {
   const AddNewTaskPage({super.key});
@@ -15,9 +18,17 @@ class AddNewTaskPage extends StatefulWidget {
 class _AddNewTaskPageState extends State<AddNewTaskPage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+  final _auth = FirebaseAuth.instance;
+  final _firestore = FirebaseFirestore.instance;
+  final _formKey = GlobalKey<FormState>();
+  final _notificationService = NotificationService();
 
   bool _alarmEnabled = false;
-  TimeOfDay _alarmTime = const TimeOfDay(hour: 0, minute: 0);
+  bool _isLoading = false;
+  TimeOfDay _alarmTime = const TimeOfDay(
+    hour: 9,
+    minute: 0,
+  ); // Default to 9:00 AM
   DateTime? _selectedDate;
 
   /// Displays the native time picker to select an alarm time.
@@ -73,6 +84,121 @@ class _AddNewTaskPageState extends State<AddNewTaskPage> {
     return DateFormat('yyyy-MM-dd').format(date);
   }
 
+  /// Schedule a notification for the task
+  Future<void> _scheduleNotification(String taskId, DateTime alarmTime) async {
+    try {
+      // Generate a unique notification ID using the task ID
+      final notificationId = taskId.hashCode;
+
+      await _notificationService.scheduleTaskNotification(
+        id: notificationId,
+        title: _titleController.text.trim(),
+        body: _descriptionController.text.trim(),
+        scheduledDate: alarmTime,
+        payload: taskId, // Use task ID as payload for handling taps
+      );
+
+      print('Notification scheduled for task $taskId at $alarmTime');
+    } catch (e) {
+      print('Error scheduling notification: $e');
+    }
+  }
+
+  Future<void> _createTask() async {
+    // Check if date is selected
+    if (_selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a date for the task'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final User? currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        throw Exception('No user logged in');
+      }
+
+      print('Creating task for user: ${currentUser.uid}'); // Debug print
+
+      // Create alarm DateTime if alarm is enabled
+      DateTime? alarmDateTime;
+      if (_alarmEnabled && _selectedDate != null) {
+        alarmDateTime = DateTime(
+          _selectedDate!.year,
+          _selectedDate!.month,
+          _selectedDate!.day,
+          _alarmTime.hour,
+          _alarmTime.minute,
+        );
+      }
+
+      // Create task document in Firestore
+      final taskData = {
+        'userId': currentUser.uid,
+        'title': _titleController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'date': Timestamp.fromDate(_selectedDate!),
+        'createdAt':
+            FieldValue.serverTimestamp(), // Changed to server timestamp
+        'isCompleted': false,
+        'alarm': {
+          'enabled': _alarmEnabled,
+          'time':
+              alarmDateTime != null ? Timestamp.fromDate(alarmDateTime) : null,
+        },
+      };
+
+      print('Task data to be saved: $taskData'); // Debug print
+
+      final docRef = await _firestore.collection('tasks').add(taskData);
+      final taskId = docRef.id;
+      print('Task created with ID: $taskId'); // Debug print
+
+      // Schedule notification if alarm is enabled
+      if (_alarmEnabled && alarmDateTime != null) {
+        await _scheduleNotification(taskId, alarmDateTime);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _alarmEnabled
+                  ? 'Task created with reminder set for ${DateFormat('MMM dd, HH:mm').format(alarmDateTime!)}'
+                  : 'Task created successfully!',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      print('Error creating task: $e'); // Debug print
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to create task: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -102,237 +228,235 @@ class _AddNewTaskPageState extends State<AddNewTaskPage> {
         ),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header row with back arrow and centered "Add a Task" text.
-              Row(
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      Icons.arrow_back,
-                      color: AppColors.mainColor,
-                      size: 30,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header row with back arrow and centered "Add a Task" text.
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        Icons.arrow_back,
+                        color: AppColors.mainColor,
+                        size: 30,
+                      ),
+                      onPressed: () => Navigator.pop(context),
                     ),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        'Add a Task',
-                        style: AppTextStyles.welcomeTitle.copyWith(
-                          fontSize: 26,
-                          fontFamily: 'LibreBaskerville',
-                          color: AppColors.mainColor,
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'Add a Task',
+                          style: AppTextStyles.welcomeTitle.copyWith(
+                            fontSize: 26,
+                            fontFamily: 'LibreBaskerville',
+                            color: AppColors.mainColor,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  // Invisible placeholder to balance the row.
-                  const Opacity(
-                    opacity: 0.0,
-                    child: IconButton(
-                      icon: Icon(Icons.arrow_back, size: 30),
-                      onPressed: null,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              // Title Field
-              Text(
-                'Tittle:',
-                style: AppTextStyles.loginLabel.copyWith(fontSize: 16),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _titleController,
-                style: AppTextStyles.loginLabel.copyWith(
-                  fontSize: 16,
-                  color: Colors.black,
-                  fontFamily: 'LibreBaskerville',
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Add your tittle here!',
-                  hintStyle: AppTextStyles.loginLabel.copyWith(
-                    color: Colors.grey,
-                    fontSize: 14,
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey.shade200,
-                  border: OutlineInputBorder(
-                    borderSide: BorderSide.none,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Description Field
-              Text(
-                'Description:',
-                style: AppTextStyles.loginLabel.copyWith(fontSize: 16),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _descriptionController,
-                maxLines: 4,
-                style: AppTextStyles.loginLabel.copyWith(
-                  fontSize: 16,
-                  color: Colors.black,
-                  fontFamily: 'LibreBaskerville',
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Add description for your task.',
-                  hintStyle: AppTextStyles.loginLabel.copyWith(
-                    color: Colors.grey,
-                    fontSize: 14,
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey.shade200,
-                  border: OutlineInputBorder(
-                    borderSide: BorderSide.none,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Date Field for Task
-              Text(
-                'Date:',
-                style: AppTextStyles.loginLabel.copyWith(fontSize: 16),
-              ),
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: () => _pickDate(context),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 16,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _formatDate(_selectedDate),
-                    style: AppTextStyles.loginLabel.copyWith(
-                      fontSize: 16,
-                      color: _selectedDate == null ? Colors.grey : Colors.black,
-                      fontFamily: 'LibreBaskerville',
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Alarm Toggle
-              Row(
-                children: [
-                  Text(
-                    'Alarm:',
-                    style: AppTextStyles.loginLabel.copyWith(fontSize: 16),
-                  ),
-                  const SizedBox(width: 20),
-                  Switch(
-                    value: _alarmEnabled,
-                    activeColor: AppColors.mainColor,
-                    onChanged: (bool value) {
-                      setState(() {
-                        _alarmEnabled = value;
-                      });
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              // Alarm Time Picker
-              Row(
-                children: [
-                  Text(
-                    'Alarm Time:',
-                    style: AppTextStyles.loginLabel.copyWith(fontSize: 16),
-                  ),
-                  const SizedBox(width: 20),
-                  GestureDetector(
-                    onTap: _alarmEnabled ? () => _pickTime(context) : null,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color:
-                            _alarmEnabled
-                                ? Colors.grey.shade200
-                                : Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        _formatTime(_alarmTime),
-                        style: AppTextStyles.loginLabel.copyWith(
-                          fontSize: 16,
-                          color: _alarmEnabled ? Colors.black : Colors.grey,
-                          fontFamily: 'LibreBaskerville',
-                        ),
+                    // Invisible placeholder to balance the row.
+                    const Opacity(
+                      opacity: 0.0,
+                      child: IconButton(
+                        icon: Icon(Icons.arrow_back, size: 30),
+                        onPressed: null,
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                // Title Field
+                Text(
+                  'Title:',
+                  style: AppTextStyles.loginLabel.copyWith(fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _titleController,
+                  style: AppTextStyles.loginLabel.copyWith(
+                    fontSize: 16,
+                    color: Colors.black,
+                    fontFamily: 'LibreBaskerville',
                   ),
-                ],
-              ),
-              const SizedBox(height: 40),
-              // "Create Task" Button with Form Validation
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Validate required fields: Title, Description, and Date.
-                    if (_titleController.text.trim().isEmpty ||
-                        _descriptionController.text.trim().isEmpty ||
-                        _selectedDate == null) {
-                      showDialog(
-                        context: context,
-                        builder: (BuildContext context) {
-                          return AlertDialog(
-                            title: const Text("Missing Fields"),
-                            content: const Text(
-                              "Please fill in all required fields.",
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.of(context).pop();
-                                },
-                                child: const Text("OK"),
-                              ),
-                            ],
-                          );
-                        },
-                      );
-                      return;
-                    }
-                    // All required fields are filled: proceed to create the task.
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.mainColor,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
+                  decoration: InputDecoration(
+                    hintText: 'Add your title here!',
+                    hintStyle: AppTextStyles.loginLabel.copyWith(
+                      color: Colors.grey,
+                      fontSize: 14,
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey.shade200,
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide.none,
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: Text(
-                    'Create Task',
-                    style: AppTextStyles.loginLabel.copyWith(
-                      color: Colors.white,
-                      fontSize: 18,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Title is required';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+                // Description Field
+                Text(
+                  'Description:',
+                  style: AppTextStyles.loginLabel.copyWith(fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _descriptionController,
+                  maxLines: 4,
+                  style: AppTextStyles.loginLabel.copyWith(
+                    fontSize: 16,
+                    color: Colors.black,
+                    fontFamily: 'LibreBaskerville',
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Add description for your task.',
+                    hintStyle: AppTextStyles.loginLabel.copyWith(
+                      color: Colors.grey,
+                      fontSize: 14,
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey.shade200,
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide.none,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Description is required';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+                // Date Field for Task
+                Text(
+                  'Date:',
+                  style: AppTextStyles.loginLabel.copyWith(fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () => _pickDate(context),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      _formatDate(_selectedDate),
+                      style: AppTextStyles.loginLabel.copyWith(
+                        fontSize: 16,
+                        color:
+                            _selectedDate == null ? Colors.grey : Colors.black,
+                        fontFamily: 'LibreBaskerville',
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 40),
-            ],
+                const SizedBox(height: 20),
+                // Alarm Toggle
+                Row(
+                  children: [
+                    Text(
+                      'Alarm:',
+                      style: AppTextStyles.loginLabel.copyWith(fontSize: 16),
+                    ),
+                    const SizedBox(width: 20),
+                    Switch(
+                      value: _alarmEnabled,
+                      activeColor: AppColors.mainColor,
+                      onChanged: (bool value) {
+                        setState(() {
+                          _alarmEnabled = value;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                // Alarm Time Picker
+                Row(
+                  children: [
+                    Text(
+                      'Alarm Time:',
+                      style: AppTextStyles.loginLabel.copyWith(fontSize: 16),
+                    ),
+                    const SizedBox(width: 20),
+                    GestureDetector(
+                      onTap: _alarmEnabled ? () => _pickTime(context) : null,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color:
+                              _alarmEnabled
+                                  ? Colors.grey.shade200
+                                  : Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          _formatTime(_alarmTime),
+                          style: AppTextStyles.loginLabel.copyWith(
+                            fontSize: 16,
+                            color: _alarmEnabled ? Colors.black : Colors.grey,
+                            fontFamily: 'LibreBaskerville',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 40),
+                // "Create Task" Button with Form Validation
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _createTask,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.mainColor,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child:
+                        _isLoading
+                            ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                            : Text(
+                              'Create Task',
+                              style: AppTextStyles.loginLabel.copyWith(
+                                color: Colors.white,
+                                fontSize: 18,
+                              ),
+                            ),
+                  ),
+                ),
+                const SizedBox(height: 40),
+              ],
+            ),
           ),
         ),
       ),

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'colors.dart';
 
 class AppTextStyles {
-  static const mainTitle = TextStyle(
+  static final mainTitle = TextStyle(
     fontFamily: 'LibreBaskerville',
     fontSize: 36,
     fontWeight: FontWeight.bold,
@@ -12,7 +12,7 @@ class AppTextStyles {
   );
 
   // Original label style (if you use it elsewhere)
-  static const label = TextStyle(
+  static final label = TextStyle(
     fontFamily: 'LibreBaskerville',
     fontSize: 16,
     fontWeight: FontWeight.bold,
@@ -27,7 +27,7 @@ class AppTextStyles {
     color: AppColors.labelTextColor,
   );
 
-  static const welcomeTitle = TextStyle(
+  static final welcomeTitle = TextStyle(
     fontFamily: 'LibreBaskerville',
     fontSize: 60,
     fontWeight: FontWeight.bold,

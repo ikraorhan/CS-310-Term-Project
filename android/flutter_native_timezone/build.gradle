@@ -1,0 +1,18 @@
+// This file overrides the flutter_native_timezone plugin's Kotlin version
+apply plugin: 'kotlin-android'
+
+dependencies {
+    // Force newer kotlin stdlib version
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+}
+
+android {
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+} 

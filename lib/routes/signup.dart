@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:tick_task/util/colors.dart';
 import 'package:tick_task/util/styles.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -19,6 +21,11 @@ class _SignUpPageState extends State<SignUpPage> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+
+  final _auth = FirebaseAuth.instance;
+  final _firestore = FirebaseFirestore.instance;
+
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -63,16 +70,8 @@ class _SignUpPageState extends State<SignUpPage> {
   }
 
   // Function to handle form submission
-  void _submitForm() {
-    if (_formKey.currentState!.validate()) {
-      // If all fields are valid, process the data (add signup logic here)
-      print("Signup Data:");
-      print("Username: ${_usernameController.text}");
-      print("Email: ${_emailController.text}");
-      print("Password: ${_passwordController.text}");
-      // You can navigate to another page or call your signup API here.
-    } else {
-      // If the form is invalid, display an alert dialog
+  Future<void> _submitForm() async {
+    if (!_formKey.currentState!.validate()) {
       showDialog(
         context: context,
         builder:
@@ -83,14 +82,75 @@ class _SignUpPageState extends State<SignUpPage> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
+                  onPressed: () => Navigator.of(context).pop(),
                   child: const Text("OK"),
                 ),
               ],
             ),
       );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Create user with email and password
+      final UserCredential userCredential = await _auth
+          .createUserWithEmailAndPassword(
+            email: _emailController.text.trim(),
+            password: _passwordController.text.trim(),
+          );
+
+      // Create user document in Firestore
+      await _firestore.collection('users').doc(userCredential.user!.uid).set({
+        'username': _usernameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'password': _passwordController.text.trim(),
+        'userId': userCredential.user!.uid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastLogin': FieldValue.serverTimestamp(),
+        'passwordUpdatedAt': FieldValue.serverTimestamp(),
+        'passwordResetRequired': false,
+        'failedLoginAttempts': 0,
+        'lastFailedLogin': null,
+      });
+
+      // Show success message and navigate to login page
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account created successfully. Please log in.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    } on FirebaseAuthException catch (e) {
+      String message = 'An error occurred during registration';
+      if (e.code == 'weak-password') {
+        message = 'The password provided is too weak';
+      } else if (e.code == 'email-already-in-use') {
+        message = 'An account already exists for that email';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('An error occurred. Please try again later.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -221,7 +281,7 @@ class _SignUpPageState extends State<SignUpPage> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _submitForm,
+                          onPressed: _isLoading ? null : _submitForm,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.mainColor,
                             padding: const EdgeInsets.symmetric(vertical: 18),
@@ -229,14 +289,24 @@ class _SignUpPageState extends State<SignUpPage> {
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          child: Text(
-                            'Register',
-                            style: AppTextStyles.loginLabel.copyWith(
-                              fontFamily: 'LibreBaskerville',
-                              fontSize: 18,
-                              color: Colors.white,
-                            ),
-                          ),
+                          child:
+                              _isLoading
+                                  ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : Text(
+                                    'Register',
+                                    style: AppTextStyles.loginLabel.copyWith(
+                                      fontFamily: 'LibreBaskerville',
+                                      fontSize: 18,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                         ),
                       ),
                     ],

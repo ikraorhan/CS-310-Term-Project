@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:tick_task/util/colors.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'firebase_options.dart';
 
+import 'package:tick_task/util/colors.dart';
 import 'package:tick_task/routes/welcome.dart';
 import 'package:tick_task/routes/login.dart';
 import 'package:tick_task/routes/signup.dart';
@@ -12,10 +15,33 @@ import 'package:tick_task/routes/settings.dart';
 import 'package:tick_task/routes/review.dart';
 import 'package:tick_task/routes/dailyReview.dart';
 import 'package:tick_task/routes/weeklyReview.dart';
+import 'package:tick_task/services/notification_service.dart';
 
-void main() {
-  runApp(
-    MaterialApp(
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Initialize Firebase Storage
+  FirebaseStorage.instance.setMaxUploadRetryTime(const Duration(seconds: 3));
+  FirebaseStorage.instance.setMaxOperationRetryTime(const Duration(seconds: 3));
+
+  // Initialize notifications
+  await NotificationService().init();
+
+  // Initialize background color from preferences
+  await AppColors.initializeBackgroundColor();
+
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
       initialRoute: '/',
       routes: {
         '/': (context) => Welcome(),
@@ -36,9 +62,8 @@ void main() {
           backgroundColor: AppColors.backgroundColor,
           elevation: 0.0,
           centerTitle: true,
-          // dont want auto back button
         ),
       ),
-    ),
-  );
+    );
+  }
 }

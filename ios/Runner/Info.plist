@@ -45,5 +45,22 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Notification permissions -->
+	<key>NSCalendarsUsageDescription</key>
+	<string>We need access to your calendar to schedule task reminders</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>We need access to your reminders to set task notifications</string>
+	<!-- Additional notification permissions -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>We need to send you notifications about your tasks and reminders</string>
+	<key>NSNotificationsUsageDescription</key>
+	<string>We need to send you reminders about your tasks</string>
+	<key>NSCriticalAlertsUsageDescription</key>
+	<string>We need to show critical reminders for your most important tasks</string>
 </dict>
 </plist>
