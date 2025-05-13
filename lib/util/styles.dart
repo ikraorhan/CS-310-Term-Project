@@ -34,4 +34,27 @@ class AppTextStyles {
     letterSpacing: 2,
     color: AppColors.mainColor,
   );
+
+  // Header style for page titles
+  static final header = TextStyle(
+    fontFamily: 'LibreBaskerville',
+    fontSize: 24,
+    fontWeight: FontWeight.bold,
+    color: AppColors.mainColor,
+  );
+
+  // Task styles
+  static final taskTitle = TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.bold,
+    color: Colors.black87,
+  );
+
+  static final taskDescription = TextStyle(fontSize: 14, color: Colors.black54);
+
+  static final taskDate = TextStyle(
+    fontSize: 12,
+    color: Colors.grey.shade600,
+    fontStyle: FontStyle.italic,
+  );
 }

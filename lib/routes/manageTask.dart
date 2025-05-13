@@ -3,7 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:tick_task/util/colors.dart';
 import 'package:tick_task/util/styles.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import 'package:tick_task/providers/task_provider.dart';
+import 'package:tick_task/providers/user_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
@@ -15,119 +17,6 @@ class ManageTaskPage extends StatefulWidget {
 }
 
 class _ManageTaskPageState extends State<ManageTaskPage> {
-  final _auth = FirebaseAuth.instance;
-  final _firestore = FirebaseFirestore.instance;
-
-  Stream<QuerySnapshot> _getTasks() {
-    final user = _auth.currentUser;
-    if (user == null) return const Stream.empty();
-
-    print('Current user ID: ${user.uid}'); // Debug print
-
-    try {
-      // Query all tasks for the current user, sorted by date
-      return _firestore
-          .collection('tasks')
-          .where('userId', isEqualTo: user.uid)
-          .orderBy('date', descending: false)
-          .snapshots();
-    } catch (e) {
-      print('Error in query: $e');
-      return const Stream.empty();
-    }
-  }
-
-  Future<void> _toggleTaskCompletion(String taskId, bool currentStatus) async {
-    if (!mounted) return;
-
-    try {
-      await _firestore.collection('tasks').doc(taskId).update({
-        'isCompleted': !currentStatus,
-      });
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            currentStatus
-                ? 'Task marked as incomplete'
-                : 'Task marked as complete',
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to update task status'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  Future<void> _deleteTask(String taskId) async {
-    if (!mounted) return;
-
-    try {
-      await _firestore.collection('tasks').doc(taskId).delete();
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Task deleted successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to delete task'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  Future<void> _clearAllTasks() async {
-    if (!mounted) return;
-
-    try {
-      final user = _auth.currentUser;
-      if (user == null) return;
-
-      final tasks =
-          await _firestore
-              .collection('tasks')
-              .where('userId', isEqualTo: user.uid)
-              .get();
-
-      final batch = _firestore.batch();
-      for (var doc in tasks.docs) {
-        batch.delete(doc.reference);
-      }
-      await batch.commit();
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('All tasks cleared successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to clear tasks'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
   String _formatDate(dynamic date) {
     if (date == null) return 'No date';
 
@@ -145,8 +34,11 @@ class _ManageTaskPageState extends State<ManageTaskPage> {
 
   @override
   Widget build(BuildContext context) {
-    final user = _auth.currentUser;
-    if (user == null) {
+    // Get providers
+    final userProvider = Provider.of<UserProvider>(context);
+    final taskProvider = Provider.of<TaskProvider>(context);
+
+    if (!userProvider.isLoggedIn) {
       return const Scaffold(
         body: Center(child: Text('Please log in to view tasks')),
       );
@@ -179,194 +71,272 @@ class _ManageTaskPageState extends State<ManageTaskPage> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header row with back button and title
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        Icons.arrow_back,
-                        color: AppColors.mainColor,
-                        size: 30,
-                      ),
-                      onPressed: () => Navigator.pushNamed(context, '/home'),
+              Row(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      Icons.arrow_back,
+                      color: AppColors.mainColor,
+                      size: 30,
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Manage Tasks',
-                      style: AppTextStyles.welcomeTitle.copyWith(
-                        fontSize: 26,
-                        fontFamily: 'LibreBaskerville',
-                        color: AppColors.mainColor,
-                      ),
+                    onPressed: () => Navigator.pushNamed(context, '/home'),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Manage Tasks',
+                    style: AppTextStyles.welcomeTitle.copyWith(
+                      fontSize: 26,
+                      fontFamily: 'LibreBaskerville',
+                      color: AppColors.mainColor,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 20),
 
-              // Task list with StreamBuilder
-              SizedBox(
-                height:
-                    MediaQuery.of(context).size.height -
-                    300, // Adjust height as needed
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: _getTasks(),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      return Center(child: Text('Error: ${snapshot.error}'));
-                    }
+              // Show loading indicator if loading
+              if (taskProvider.isLoading)
+                const Center(child: CircularProgressIndicator()),
 
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+              // Show error message if there is one
+              if (taskProvider.errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                    taskProvider.errorMessage!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
 
-                    final docs = snapshot.data?.docs ?? [];
-
-                    if (docs.isEmpty) {
-                      return Center(
-                        child: Text(
-                          'No tasks found',
-                          style: AppTextStyles.loginLabel.copyWith(
-                            color: Colors.grey,
-                            fontSize: 18,
-                          ),
+              // Task list
+              if (!taskProvider.isLoading)
+                taskProvider.tasks.isEmpty
+                    ? Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Text(
+                        'No tasks found. Add some tasks to get started!',
+                        style: AppTextStyles.loginLabel.copyWith(
+                          fontFamily: 'LibreBaskerville',
+                          fontSize: 16,
+                          color: Colors.grey.shade600,
                         ),
-                      );
-                    }
-
-                    return ListView.builder(
-                      shrinkWrap: true,
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      itemCount: docs.length,
-                      itemBuilder: (context, index) {
-                        final doc = docs[index];
-                        final data = doc.data() as Map<String, dynamic>;
-
-                        return Card(
-                          elevation: 1.0,
-                          margin: const EdgeInsets.symmetric(vertical: 6.0),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: ListTile(
-                            leading: IconButton(
-                              icon: Icon(
-                                data['isCompleted'] == true
-                                    ? Icons.check_box
-                                    : Icons.check_box_outline_blank,
-                                color: AppColors.mainColor,
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                    : Column(
+                      children:
+                          taskProvider.tasks.map((task) {
+                            return Card(
+                              elevation: 1.0,
+                              margin: const EdgeInsets.symmetric(vertical: 6.0),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              onPressed:
-                                  () => _toggleTaskCompletion(
-                                    doc.id,
-                                    data['isCompleted'] ?? false,
+                              child: ListTile(
+                                leading: IconButton(
+                                  icon: Icon(
+                                    task.isCompleted
+                                        ? Icons.check_box
+                                        : Icons.check_box_outline_blank,
+                                    color: AppColors.mainColor,
                                   ),
-                            ),
-                            title: Text(
-                              data['title'] ?? 'Untitled Task',
-                              style: AppTextStyles.loginLabel.copyWith(
-                                fontFamily: 'LibreBaskerville',
-                                color: Colors.grey.shade800,
-                                fontWeight: FontWeight.w400,
-                                decoration:
-                                    data['isCompleted'] == true
-                                        ? TextDecoration.lineThrough
-                                        : TextDecoration.none,
-                              ),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  data['description'] ?? '',
-                                  style: TextStyle(
-                                    color: Colors.grey.shade600,
-                                    fontSize: 12,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
+                                  onPressed: () async {
+                                    await taskProvider.toggleTaskCompletion(
+                                      task.id,
+                                    );
+                                  },
                                 ),
-                                Text(
-                                  _formatDate(data['date']),
-                                  style: TextStyle(
-                                    color: Colors.grey.shade500,
-                                    fontSize: 11,
+                                title: Text(
+                                  task.title,
+                                  style: AppTextStyles.loginLabel.copyWith(
+                                    fontFamily: 'LibreBaskerville',
+                                    color: Colors.grey.shade800,
+                                    fontWeight: FontWeight.w400,
+                                    decoration:
+                                        task.isCompleted
+                                            ? TextDecoration.lineThrough
+                                            : TextDecoration.none,
                                   ),
                                 ),
-                              ],
-                            ),
-                            trailing: IconButton(
-                              icon: Icon(
-                                Icons.close,
-                                color: AppColors.mainColor,
-                              ),
-                              onPressed: () => _deleteTask(doc.id),
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
+                                subtitle:
+                                    task.description.isNotEmpty
+                                        ? Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              task.description,
+                                              style: TextStyle(
+                                                color: Colors.grey.shade600,
+                                                fontSize: 12,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            Text(
+                                              _formatDate(task.date),
+                                              style: TextStyle(
+                                                color: Colors.grey.shade500,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                        : Text(
+                                          _formatDate(task.date),
+                                          style: TextStyle(
+                                            color: Colors.grey.shade500,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                trailing: IconButton(
+                                  icon: Icon(
+                                    Icons.close,
+                                    color: AppColors.mainColor,
+                                  ),
+                                  onPressed: () async {
+                                    // Store the context before the async gap
+                                    final scaffoldMessenger =
+                                        ScaffoldMessenger.of(context);
 
-              // Buttons at the bottom
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
+                                    await taskProvider.deleteTask(task.id);
+
+                                    if (!mounted) return;
+                                    scaffoldMessenger.showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Task deleted successfully',
+                                        ),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                    ),
+
+              const SizedBox(height: 30),
+
+              // Buttons row - Add New Task and Clear All
+              if (!taskProvider.isLoading)
+                Row(
                   children: [
+                    // Add New Task button
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed:
-                            () => Navigator.pushNamed(context, '/addNewTask'),
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/addNewTask');
+                        },
                         icon: const Icon(Icons.add, color: Colors.white),
                         label: const Text(
                           'Add New Task',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 18,
+                            fontSize: 16,
                             fontFamily: 'LibreBaskerville',
                           ),
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.mainColor,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          padding: const EdgeInsets.symmetric(vertical: 12.0),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(12.0),
                           ),
                         ),
                       ),
                     ),
+
                     const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _clearAllTasks,
-                        icon: const Icon(Icons.delete, color: Colors.white),
-                        label: const Text(
-                          'Clear All Tasks',
-                          style: TextStyle(
+
+                    // Clear All Tasks button (only if tasks exist)
+                    if (taskProvider.tasks.isNotEmpty)
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            // Store the context before any async operation
+                            final scaffoldMessenger = ScaffoldMessenger.of(
+                              context,
+                            );
+
+                            // Confirm before clearing all tasks
+                            final confirmed = await showDialog<bool>(
+                              context: context,
+                              builder:
+                                  (dialogContext) => AlertDialog(
+                                    title: const Text('Clear all tasks?'),
+                                    content: const Text(
+                                      'This will remove all your tasks and cannot be undone.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed:
+                                            () => Navigator.pop(
+                                              dialogContext,
+                                              false,
+                                            ),
+                                        child: const Text('CANCEL'),
+                                      ),
+                                      TextButton(
+                                        onPressed:
+                                            () => Navigator.pop(
+                                              dialogContext,
+                                              true,
+                                            ),
+                                        child: const Text('CLEAR ALL'),
+                                      ),
+                                    ],
+                                  ),
+                            );
+
+                            if (confirmed == true && mounted) {
+                              final success =
+                                  await taskProvider.clearAllTasks();
+
+                              if (!mounted) return;
+                              if (success) {
+                                scaffoldMessenger.showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'All tasks cleared successfully',
+                                    ),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          icon: const Icon(
+                            Icons.delete_forever,
                             color: Colors.white,
-                            fontSize: 18,
-                            fontFamily: 'LibreBaskerville',
                           ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.mainColor,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                          label: const Text(
+                            'Clear All',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontFamily: 'LibreBaskerville',
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red.shade400,
+                            padding: const EdgeInsets.symmetric(vertical: 12.0),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12.0),
+                            ),
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
-              ),
+
+              const SizedBox(height: 20),
             ],
           ),
         ),

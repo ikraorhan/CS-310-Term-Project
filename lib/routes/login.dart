@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:tick_task/util/colors.dart';
 import 'package:tick_task/util/styles.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import 'package:tick_task/providers/user_provider.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -15,9 +15,6 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final _auth = FirebaseAuth.instance;
-  final _firestore = FirebaseFirestore.instance;
-
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
@@ -52,98 +49,34 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      // Sign in with Firebase Auth
-      final UserCredential userCredential = await _auth
-          .signInWithEmailAndPassword(
-            email: _emailController.text.trim(),
-            password: _passwordController.text.trim(),
-          );
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
 
-      // Get user document from Firestore
-      final userDoc =
-          await _firestore
-              .collection('users')
-              .doc(userCredential.user!.uid)
-              .get();
-
-      if (!userDoc.exists) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('User data not found'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
-
-      final userData = userDoc.data()!;
-
-      // Verify stored password
-      if (userData['password'] != _passwordController.text.trim()) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Invalid password'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
-
-      // Update last login time and ensure userId exists
-      await _firestore.collection('users').doc(userCredential.user!.uid).update(
-        {
-          'lastLogin': FieldValue.serverTimestamp(),
-          'failedLoginAttempts': 0,
-          'lastFailedLogin': null,
-          'userId': userCredential.user!.uid, // Ensure userId exists
-        },
+      final success = await userProvider.signIn(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
       );
 
-      // Navigate to home page
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
-      }
-    } on FirebaseAuthException catch (e) {
-      String message = 'An error occurred during login';
-      if (e.code == 'user-not-found') {
-        message = 'No user found for that email';
-      } else if (e.code == 'wrong-password') {
-        message = 'Wrong password provided';
-
-        // Update failed login attempts if user exists
-        try {
-          final userQuery =
-              await _firestore
-                  .collection('users')
-                  .where('email', isEqualTo: _emailController.text.trim())
-                  .get();
-
-          if (userQuery.docs.isNotEmpty) {
-            final userDoc = userQuery.docs.first;
-            await _firestore.collection('users').doc(userDoc.id).update({
-              'failedLoginAttempts': FieldValue.increment(1),
-              'lastFailedLogin': FieldValue.serverTimestamp(),
-            });
-          }
-        } catch (e) {
-          // Ignore error updating failed attempts
+      if (success) {
+        // Navigate to home page
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/home');
         }
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: Colors.red),
-        );
+      } else {
+        // Show error message
+        if (mounted && userProvider.errorMessage != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(userProvider.errorMessage!),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('An error occurred. Please try again later.'),
+          SnackBar(
+            content: Text('An error occurred: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -196,12 +129,12 @@ class _LoginPageState extends State<LoginPage> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       // Username Label using new black text style
-                      Text('EMAIL', style: AppTextStyles.loginLabel),
+                      Text('USERNAME', style: AppTextStyles.loginLabel),
                       const SizedBox(height: 8),
-                      // Username Field
+                      // Username field
                       TextFormField(
                         controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
+                        validator: _validateEmail,
                         textAlign: TextAlign.center,
                         style: AppTextStyles.loginLabel.copyWith(
                           fontFamily: 'LibreBaskerville',
@@ -218,22 +151,23 @@ class _LoginPageState extends State<LoginPage> {
                             borderSide: BorderSide.none,
                           ),
                         ),
-                        validator: _validateEmail,
+                        keyboardType: TextInputType.emailAddress,
                       ),
                       const SizedBox(height: 30),
                       // Password Label using new black text style
                       Text('PASSWORD', style: AppTextStyles.loginLabel),
                       const SizedBox(height: 8),
-                      // Password Field
+                      // Password field
                       TextFormField(
                         controller: _passwordController,
+                        validator: _validatePassword,
                         obscureText: true,
                         textAlign: TextAlign.center,
                         style: AppTextStyles.loginLabel.copyWith(
                           fontFamily: 'LibreBaskerville',
                         ),
                         decoration: InputDecoration(
-                          hintText: '*****',
+                          hintText: 'Enter your password',
                           hintStyle: AppTextStyles.loginLabel.copyWith(
                             color: Colors.grey,
                           ),
@@ -244,39 +178,47 @@ class _LoginPageState extends State<LoginPage> {
                             borderSide: BorderSide.none,
                           ),
                         ),
-                        validator: _validatePassword,
                       ),
-                      const SizedBox(height: 50),
-                      // Login Button that navigates to the home page on click
+                      const SizedBox(height: 40),
+                      // Login Button
                       SizedBox(
                         width: double.infinity,
+                        height: 50,
                         child: ElevatedButton(
                           onPressed: _isLoading ? null : _login,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.mainColor,
-                            padding: const EdgeInsets.symmetric(vertical: 18),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                           ),
                           child:
                               _isLoading
-                                  ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
+                                  ? const CircularProgressIndicator(
+                                    color: Colors.white,
                                   )
-                                  : Text(
+                                  : const Text(
                                     'Login',
-                                    style: AppTextStyles.loginLabel.copyWith(
-                                      fontFamily: 'LibreBaskerville',
-                                      fontSize: 18,
+                                    style: TextStyle(
                                       color: Colors.white,
+                                      fontSize: 18,
+                                      fontFamily: 'LibreBaskerville',
                                     ),
                                   ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      // Sign Up Link
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pushReplacementNamed(context, '/signup');
+                        },
+                        child: Text(
+                          'Don\'t have an account? Sign Up',
+                          style: TextStyle(
+                            color: AppColors.mainColor,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
                     ],

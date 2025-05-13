@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:tick_task/util/colors.dart';
 import 'package:tick_task/util/styles.dart';
 import 'package:intl/intl.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import 'package:tick_task/providers/task_provider.dart';
 import 'package:tick_task/services/notification_service.dart';
 
 class AddNewTaskPage extends StatefulWidget {
@@ -18,8 +18,6 @@ class AddNewTaskPage extends StatefulWidget {
 class _AddNewTaskPageState extends State<AddNewTaskPage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
-  final _auth = FirebaseAuth.instance;
-  final _firestore = FirebaseFirestore.instance;
   final _formKey = GlobalKey<FormState>();
   final _notificationService = NotificationService();
 
@@ -123,12 +121,10 @@ class _AddNewTaskPageState extends State<AddNewTaskPage> {
     setState(() => _isLoading = true);
 
     try {
-      final User? currentUser = _auth.currentUser;
-      if (currentUser == null) {
-        throw Exception('No user logged in');
-      }
+      final taskProvider = Provider.of<TaskProvider>(context, listen: false);
 
-      print('Creating task for user: ${currentUser.uid}'); // Debug print
+      final title = _titleController.text.trim();
+      final description = _descriptionController.text.trim();
 
       // Create alarm DateTime if alarm is enabled
       DateTime? alarmDateTime;
@@ -142,48 +138,56 @@ class _AddNewTaskPageState extends State<AddNewTaskPage> {
         );
       }
 
-      // Create task document in Firestore
-      final taskData = {
-        'userId': currentUser.uid,
-        'title': _titleController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'date': Timestamp.fromDate(_selectedDate!),
-        'createdAt':
-            FieldValue.serverTimestamp(), // Changed to server timestamp
-        'isCompleted': false,
-        'alarm': {
-          'enabled': _alarmEnabled,
-          'time':
-              alarmDateTime != null ? Timestamp.fromDate(alarmDateTime) : null,
-        },
-      };
+      // Add task using provider
+      final success = await taskProvider.addTask(
+        title: title,
+        description: description,
+        date: _selectedDate!,
+      );
 
-      print('Task data to be saved: $taskData'); // Debug print
+      if (success) {
+        // Get the task ID - for notification
+        final taskId =
+            taskProvider.tasks
+                .firstWhere(
+                  (task) =>
+                      task.title == title && task.description == description,
+                  orElse: () => throw Exception('Task not found after adding'),
+                )
+                .id;
 
-      final docRef = await _firestore.collection('tasks').add(taskData);
-      final taskId = docRef.id;
-      print('Task created with ID: $taskId'); // Debug print
+        // Schedule notification if alarm is enabled
+        if (_alarmEnabled && alarmDateTime != null) {
+          await _scheduleNotification(taskId, alarmDateTime);
+        }
 
-      // Schedule notification if alarm is enabled
-      if (_alarmEnabled && alarmDateTime != null) {
-        await _scheduleNotification(taskId, alarmDateTime);
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _alarmEnabled
-                  ? 'Task created with reminder set for ${DateFormat('MMM dd, HH:mm').format(alarmDateTime!)}'
-                  : 'Task created successfully!',
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                _alarmEnabled
+                    ? 'Task created with reminder set for ${DateFormat('MMM dd, HH:mm').format(alarmDateTime!)}'
+                    : 'Task created successfully!',
+              ),
+              backgroundColor: Colors.green,
             ),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context);
+          );
+          Navigator.pop(context);
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to create task: ${taskProvider.errorMessage}',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
-      print('Error creating task: $e'); // Debug print
+      print('Error creating task: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

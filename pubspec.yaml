@@ -43,6 +43,7 @@ dependencies:
   cloud_firestore: ^5.6.7
   flutter_local_notifications: ^19.1.0
   timezone: ^0.10.1
+  provider: ^6.1.2
   # flutter_native_timezone: ^2.0.0 # Removed due to JVM target incompatibility
 
 dev_dependencies:

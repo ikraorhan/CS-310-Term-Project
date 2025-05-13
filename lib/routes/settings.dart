@@ -8,8 +8,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'dart:convert';
-import 'dart:io';
-import 'dart:ui' as ui;
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -125,7 +123,7 @@ class _SettingsPageState extends State<SettingsPage> {
         Map<String, dynamic> updateData = {
           'username': _nameController.text.trim(),
           'country': _countryController.text.trim(),
-          'backgroundColor': _selectedBackgroundColor.value,
+          'backgroundColor': _selectedBackgroundColor.toARGB32(),
           'updatedAt': FieldValue.serverTimestamp(),
         };
 
@@ -221,7 +219,7 @@ class _SettingsPageState extends State<SettingsPage> {
         }
       } catch (firestoreError) {
         print('Error saving to Firestore: $firestoreError');
-        throw firestoreError; // Rethrow to be caught by outer catch
+        rethrow; // Use rethrow instead of throw firestoreError
       }
 
       if (!mounted) return;

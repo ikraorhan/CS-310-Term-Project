@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:tick_task/util/colors.dart';
 import 'package:tick_task/util/styles.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import 'package:tick_task/providers/user_provider.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -21,9 +21,6 @@ class _SignUpPageState extends State<SignUpPage> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-
-  final _auth = FirebaseAuth.instance;
-  final _firestore = FirebaseFirestore.instance;
 
   bool _isLoading = false;
 
@@ -72,77 +69,47 @@ class _SignUpPageState extends State<SignUpPage> {
   // Function to handle form submission
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) {
-      showDialog(
-        context: context,
-        builder:
-            (_) => AlertDialog(
-              title: const Text("Form Invalid"),
-              content: const Text(
-                "Please fix the errors in red before submitting.",
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text("OK"),
-                ),
-              ],
-            ),
-      );
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      // Create user with email and password
-      final UserCredential userCredential = await _auth
-          .createUserWithEmailAndPassword(
-            email: _emailController.text.trim(),
-            password: _passwordController.text.trim(),
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+
+      final success = await userProvider.register(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+        _usernameController.text.trim(),
+      );
+
+      if (success) {
+        // Show success message and navigate to home page
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Account created successfully!'),
+              backgroundColor: Colors.green,
+            ),
           );
-
-      // Create user document in Firestore
-      await _firestore.collection('users').doc(userCredential.user!.uid).set({
-        'username': _usernameController.text.trim(),
-        'email': _emailController.text.trim(),
-        'password': _passwordController.text.trim(),
-        'userId': userCredential.user!.uid,
-        'createdAt': FieldValue.serverTimestamp(),
-        'lastLogin': FieldValue.serverTimestamp(),
-        'passwordUpdatedAt': FieldValue.serverTimestamp(),
-        'passwordResetRequired': false,
-        'failedLoginAttempts': 0,
-        'lastFailedLogin': null,
-      });
-
-      // Show success message and navigate to login page
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account created successfully. Please log in.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pushReplacementNamed(context, '/login');
-      }
-    } on FirebaseAuthException catch (e) {
-      String message = 'An error occurred during registration';
-      if (e.code == 'weak-password') {
-        message = 'The password provided is too weak';
-      } else if (e.code == 'email-already-in-use') {
-        message = 'An account already exists for that email';
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: Colors.red),
-        );
+          Navigator.pushReplacementNamed(context, '/home');
+        }
+      } else {
+        // Show error message
+        if (mounted && userProvider.errorMessage != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(userProvider.errorMessage!),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('An error occurred. Please try again later.'),
+          SnackBar(
+            content: Text('An error occurred: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -197,11 +164,12 @@ class _SignUpPageState extends State<SignUpPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Username Section (kept as requested)
+                      // Username field
                       Text('USERNAME', style: AppTextStyles.loginLabel),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _usernameController,
+                        validator: _validateUsername,
                         textAlign: TextAlign.center,
                         style: AppTextStyles.loginLabel.copyWith(
                           fontFamily: 'LibreBaskerville',
@@ -218,16 +186,15 @@ class _SignUpPageState extends State<SignUpPage> {
                             borderSide: BorderSide.none,
                           ),
                         ),
-                        validator: _validateUsername,
                       ),
-
                       const SizedBox(height: 30),
 
-                      // Email Section with validation
+                      // Email field
                       Text('EMAIL', style: AppTextStyles.loginLabel),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _emailController,
+                        validator: _validateEmail,
                         keyboardType: TextInputType.emailAddress,
                         textAlign: TextAlign.center,
                         style: AppTextStyles.loginLabel.copyWith(
@@ -245,23 +212,22 @@ class _SignUpPageState extends State<SignUpPage> {
                             borderSide: BorderSide.none,
                           ),
                         ),
-                        validator: _validateEmail,
                       ),
-
                       const SizedBox(height: 30),
 
-                      // Password Section with length validation
+                      // Password field
                       Text('PASSWORD', style: AppTextStyles.loginLabel),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _passwordController,
+                        validator: _validatePassword,
                         obscureText: true,
                         textAlign: TextAlign.center,
                         style: AppTextStyles.loginLabel.copyWith(
                           fontFamily: 'LibreBaskerville',
                         ),
                         decoration: InputDecoration(
-                          hintText: '*****',
+                          hintText: 'Enter your password',
                           hintStyle: AppTextStyles.loginLabel.copyWith(
                             color: Colors.grey,
                           ),
@@ -272,41 +238,49 @@ class _SignUpPageState extends State<SignUpPage> {
                             borderSide: BorderSide.none,
                           ),
                         ),
-                        validator: _validatePassword,
                       ),
+                      const SizedBox(height: 40),
 
-                      const SizedBox(height: 50),
-
-                      // Register Button
+                      // Sign Up Button
                       SizedBox(
                         width: double.infinity,
+                        height: 50,
                         child: ElevatedButton(
                           onPressed: _isLoading ? null : _submitForm,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.mainColor,
-                            padding: const EdgeInsets.symmetric(vertical: 18),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                           ),
                           child:
                               _isLoading
-                                  ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
+                                  ? const CircularProgressIndicator(
+                                    color: Colors.white,
                                   )
-                                  : Text(
-                                    'Register',
-                                    style: AppTextStyles.loginLabel.copyWith(
-                                      fontFamily: 'LibreBaskerville',
-                                      fontSize: 18,
+                                  : const Text(
+                                    'Sign Up',
+                                    style: TextStyle(
                                       color: Colors.white,
+                                      fontSize: 18,
+                                      fontFamily: 'LibreBaskerville',
                                     ),
                                   ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Login Link
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pushReplacementNamed(context, '/login');
+                        },
+                        child: Text(
+                          'Already have an account? Login',
+                          style: TextStyle(
+                            color: AppColors.mainColor,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
                     ],
