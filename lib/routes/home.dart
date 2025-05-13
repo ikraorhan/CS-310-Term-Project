@@ -34,6 +34,16 @@ class _HomePageState extends State<HomePage> {
     _setupRealTimeUpdates();
     _debugCheckTaskItems(); // Add debug check for taskItems
     _createTestTaskIfEmpty(); // Create a test task if needed
+
+    // Add debug logging for user data
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      userProvider.debugUserData(); // Call the debug method
+
+      // Forcing a reload of the user data to ensure it's up to date
+      print('Forcing user data reload in home.dart');
+      userProvider.reloadUserData();
+    });
   }
 
   @override
@@ -180,6 +190,9 @@ class _HomePageState extends State<HomePage> {
     final username = userProvider.user?.username ?? 'User';
     final profilePictureUrl = userProvider.profileImageUrl;
 
+    // Debug profile picture URL
+    print('Profile Picture URL: $profilePictureUrl');
+
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
@@ -226,9 +239,13 @@ class _HomePageState extends State<HomePage> {
                           5, // Equivalent of withOpacity(0.2)
                     ),
                     backgroundImage:
-                        profilePictureUrl != null &&
-                                !profilePictureUrl.startsWith('data:')
-                            ? NetworkImage(profilePictureUrl)
+                        profilePictureUrl != null
+                            ? profilePictureUrl.startsWith('data:')
+                                ? MemoryImage(
+                                  base64Decode(profilePictureUrl.split(',')[1]),
+                                )
+                                : NetworkImage(profilePictureUrl)
+                                    as ImageProvider
                             : null,
                     child:
                         profilePictureUrl == null
@@ -245,6 +262,7 @@ class _HomePageState extends State<HomePage> {
                                 height: 80,
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) {
+                                  print('Error loading profile image: $error');
                                   return Icon(
                                     Icons.person,
                                     size: 40,

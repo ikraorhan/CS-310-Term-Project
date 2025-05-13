@@ -13,14 +13,13 @@ service cloud.firestore {
     
     // Check if a timestamp is valid
     function isValidTimestamp(timeValue) {
-      return timeValue is timestamp && 
-             timeValue.toMillis() <= request.time.toMillis();
+      return timeValue is timestamp;
     }
     
     // Check if required fields exist in the request for tasks
     function hasRequiredTaskFields() {
       let requiredFields = ['title', 'userId', 'date', 'isCompleted'];
-      let allowedFields = ['description', 'createdAt'];
+      let allowedFields = ['description', 'createdAt', 'priority'];
       
       return requiredFields.hasAll(request.resource.data.keys) && 
              request.resource.data.keys.hasOnly(requiredFields.concat(allowedFields)) &&
@@ -50,18 +49,26 @@ service cloud.firestore {
     
     // Users collection rules
     match /users/{userId} {
-      // Allow any authenticated user to read their own profile
-      allow read: if isOwner(userId);
+      // Allow reading user document to anyone (needed for login)
+      allow read: if true; 
       
       // Allow any authenticated user to create their own document 
       // Without restrictions during registration
       allow create: if request.auth.uid == userId;
       
-      // Allow updates only to their own profile and only specific fields
+      // Allow updates only to their own profile
       allow update: if isOwner(userId);
       
       // No deletion of user profiles allowed
       allow delete: if false;
+    }
+    
+    // Special rule to allow username lookup for login
+    match /users/{userId} {
+      // Allow reading usernames and emails for authentication purposes
+      allow list: if request.query.limit <= 1 && 
+                   request.query.filters.size() >= 1 &&
+                   ('username' in request.query.filters[0] || 'email' in request.query.filters[0]);
     }
     
     // Deny access to all other collections by default

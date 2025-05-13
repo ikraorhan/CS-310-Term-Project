@@ -64,15 +64,21 @@ class _SettingsPageState extends State<SettingsPage> {
             _nameController.text = data['username'] ?? '';
             _countryController.text = data['country'] ?? '';
 
-            // Load profile picture data
-            _profilePictureUrl = data['profilePicture'];
+            // Load profile picture data - handle both field names
+            _profilePictureUrl =
+                data['profilePicture'] ?? data['profilePictureUrl'];
 
             // Also load the base64 data if available
             if (data['profilePictureBase64'] != null &&
                 (data['profilePictureBase64'] as String).isNotEmpty) {
               _base64Image = data['profilePictureBase64'];
-              _profilePictureUrl =
-                  'data:image/jpeg;base64,${data['profilePictureBase64']}';
+
+              // Create the image URL based on whether it already has the data URL prefix
+              if (_base64Image!.startsWith('data:')) {
+                _profilePictureUrl = _base64Image;
+              } else {
+                _profilePictureUrl = 'data:image/jpeg;base64,${_base64Image}';
+              }
               print(
                 'Loaded base64 profile image with length: ${_base64Image?.length}',
               );

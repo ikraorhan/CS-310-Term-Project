@@ -84,15 +84,20 @@ class _SignUpPageState extends State<SignUpPage> {
       );
 
       if (success) {
-        // Show success message and navigate to home page
+        // Show success message and navigate to login page
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Account created successfully!'),
+              content: Text('Account created successfully! Please login.'),
               backgroundColor: Colors.green,
             ),
           );
-          Navigator.pushReplacementNamed(context, '/home');
+
+          // Sign out the user since we want them to log in again
+          await userProvider.signOut();
+
+          // Navigate to login page instead of home
+          Navigator.pushReplacementNamed(context, '/login');
         }
       } else {
         // Show error message

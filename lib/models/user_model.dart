@@ -23,7 +23,7 @@ class UserModel {
       id: doc.id,
       username: data['username'] ?? 'User',
       email: data['email'] ?? '',
-      profilePictureUrl: data['profilePicture'],
+      profilePictureUrl: data['profilePicture'] ?? data['profilePictureUrl'],
       profilePictureBase64: data['profilePictureBase64'],
       createdAt:
           data['createdAt'] != null

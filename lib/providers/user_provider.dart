@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -59,61 +60,118 @@ class UserProvider extends ChangeNotifier {
   String? _getProfileImageUrl() {
     if (_user == null) return null;
 
+    // Debug log
+    print('Getting profile image URL for user: ${_user!.email}');
+    print('Base64 image available: ${_user!.profilePictureBase64 != null}');
+    if (_user!.profilePictureBase64 != null) {
+      print('Base64 image length: ${_user!.profilePictureBase64!.length}');
+    }
+
     // Prioritize base64 if available
     if (_user!.profilePictureBase64 != null &&
         _user!.profilePictureBase64!.isNotEmpty) {
       try {
-        // Validate base64 string
-        base64Decode(
-          _user!.profilePictureBase64!.substring(
-            0,
-            [
-              100,
-              _user!.profilePictureBase64!.length,
-            ].reduce((a, b) => a < b ? a : b),
-          ),
-        );
+        // Check if base64 already includes the data URL prefix
+        if (_user!.profilePictureBase64!.startsWith('data:')) {
+          print('Base64 image already has data URL prefix');
+          return _user!.profilePictureBase64;
+        }
 
+        // Validate base64 string by decoding a small part
+        final sampleLength = min(100, _user!.profilePictureBase64!.length);
+        base64Decode(_user!.profilePictureBase64!.substring(0, sampleLength));
+
+        print('Base64 validation successful, creating data URL');
         // If successful, create a data URL format
         return 'data:image/jpeg;base64,${_user!.profilePictureBase64}';
       } catch (e) {
-        // If invalid base64, fall back to URL
+        // If invalid base64, log error and fall back to URL
+        print('Error with base64 image: $e');
       }
     }
 
     // Fall back to regular URL if base64 is not available or invalid
     if (_user!.profilePictureUrl != null &&
         _user!.profilePictureUrl!.isNotEmpty) {
+      print('Using profile picture URL: ${_user!.profilePictureUrl}');
       return _user!.profilePictureUrl;
     }
 
+    print('No profile picture available');
     return null;
   }
 
-  // Sign in with email and password
-  Future<bool> signIn(String email, String password) async {
+  // Sign in with username and password
+  Future<bool> signIn(String username, String password) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      await _auth.signInWithEmailAndPassword(email: email, password: password);
+      print("Attempting to sign in with username: $username");
 
-      _isLoading = false;
-      notifyListeners();
-      return true;
+      // First, we need to find the user's email from their username
+      try {
+        final usersSnapshot =
+            await _firestore
+                .collection('users')
+                .where('username', isEqualTo: username)
+                .limit(1)
+                .get();
+
+        print(
+          "Query completed. Found ${usersSnapshot.docs.length} matching users",
+        );
+
+        if (usersSnapshot.docs.isEmpty) {
+          _isLoading = false;
+          _errorMessage = "No user found with this username.";
+          print("No user found with username: $username");
+          notifyListeners();
+          return false;
+        }
+
+        // Get the email from the document
+        final userDoc = usersSnapshot.docs.first;
+        final email = userDoc.data()['email'] as String;
+
+        print("Found email: $email for username: $username");
+
+        // Now sign in with email and password
+        try {
+          await _auth.signInWithEmailAndPassword(
+            email: email,
+            password: password,
+          );
+          print("Authentication successful with Firebase");
+
+          _isLoading = false;
+          notifyListeners();
+          return true;
+        } catch (authError) {
+          print("Firebase Auth Error: $authError");
+          throw authError; // Re-throw to be caught by outer catch block
+        }
+      } catch (firestoreError) {
+        print("Firestore Error during username lookup: $firestoreError");
+        _isLoading = false;
+        _errorMessage = "Error looking up user: $firestoreError";
+        notifyListeners();
+        return false;
+      }
     } on FirebaseAuthException catch (e) {
+      print("Firebase Auth Exception: ${e.code} - ${e.message}");
       _isLoading = false;
 
       switch (e.code) {
         case 'user-not-found':
-          _errorMessage = "No user found with this email.";
+          _errorMessage = "Invalid username or password.";
           break;
         case 'wrong-password':
-          _errorMessage = "Incorrect password.";
+          _errorMessage = "Invalid username or password.";
           break;
         case 'invalid-email':
-          _errorMessage = "Invalid email format.";
+          _errorMessage = "Invalid email format associated with this username.";
           break;
         default:
           _errorMessage = "Sign in failed: ${e.message}";
@@ -122,6 +180,7 @@ class UserProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
+      print("Unexpected error during sign in: $e");
       _isLoading = false;
       _errorMessage = "Sign in failed: $e";
       notifyListeners();
@@ -304,6 +363,67 @@ class UserProvider extends ChangeNotifier {
       _errorMessage = "Failed to get account creation date: $e";
       notifyListeners();
       return user.metadata.creationTime ?? DateTime.now();
+    }
+  }
+
+  // Debug method to print user data
+  void debugUserData() {
+    if (_user == null) {
+      print('DEBUG: User is null');
+      return;
+    }
+
+    print('DEBUG: User ID: ${_user!.id}');
+    print('DEBUG: Username: ${_user!.username}');
+    print('DEBUG: Email: ${_user!.email}');
+    print('DEBUG: ProfilePictureUrl: ${_user!.profilePictureUrl}');
+    print(
+      'DEBUG: Has ProfilePictureBase64: ${_user!.profilePictureBase64 != null}',
+    );
+    if (_user!.profilePictureBase64 != null) {
+      print(
+        'DEBUG: ProfilePictureBase64 length: ${_user!.profilePictureBase64!.length}',
+      );
+      print(
+        'DEBUG: ProfilePictureBase64 starts with: ${_user!.profilePictureBase64!.substring(0, min(20, _user!.profilePictureBase64!.length))}...',
+      );
+    }
+
+    // Also debug the raw Firestore document
+    _firestore
+        .collection('users')
+        .doc(_user!.id)
+        .get()
+        .then((doc) {
+          if (doc.exists) {
+            final data = doc.data()!;
+            print('DEBUG: Raw Firestore data for user:');
+            data.forEach((key, value) {
+              if (value is String && value.length > 100) {
+                print(
+                  'DEBUG: $key: ${value.substring(0, 20)}... (${value.length} chars)',
+                );
+              } else {
+                print('DEBUG: $key: $value');
+              }
+            });
+          } else {
+            print('DEBUG: User document does not exist in Firestore');
+          }
+        })
+        .catchError((error) {
+          print('DEBUG: Error fetching user document: $error');
+        });
+  }
+
+  // Reload user data manually
+  Future<void> reloadUserData() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      await _loadUserData(user.uid);
+    } else {
+      _errorMessage = "No user logged in";
+      notifyListeners();
     }
   }
 }

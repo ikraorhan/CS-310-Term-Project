@@ -15,21 +15,21 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  String? _validateEmail(String? value) {
+  String? _validateUsername(String? value) {
     if (value == null || value.trim().isEmpty) {
-      return 'Email is required';
+      return 'Username is required';
     }
     return null;
   }
@@ -52,7 +52,7 @@ class _LoginPageState extends State<LoginPage> {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
 
       final success = await userProvider.signIn(
-        _emailController.text.trim(),
+        _usernameController.text.trim(),
         _passwordController.text.trim(),
       );
 
@@ -133,14 +133,14 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: 8),
                       // Username field
                       TextFormField(
-                        controller: _emailController,
-                        validator: _validateEmail,
+                        controller: _usernameController,
+                        validator: _validateUsername,
                         textAlign: TextAlign.center,
                         style: AppTextStyles.loginLabel.copyWith(
                           fontFamily: 'LibreBaskerville',
                         ),
                         decoration: InputDecoration(
-                          hintText: 'example@mail.com',
+                          hintText: 'Enter your username',
                           hintStyle: AppTextStyles.loginLabel.copyWith(
                             color: Colors.grey,
                           ),
@@ -151,7 +151,6 @@ class _LoginPageState extends State<LoginPage> {
                             borderSide: BorderSide.none,
                           ),
                         ),
-                        keyboardType: TextInputType.emailAddress,
                       ),
                       const SizedBox(height: 30),
                       // Password Label using new black text style
